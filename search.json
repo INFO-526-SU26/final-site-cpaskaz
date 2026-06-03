@@ -1,0 +1,121 @@
+[
+  {
+    "objectID": "proposal.html",
+    "href": "proposal.html",
+    "title": "Timely and Effective Care Across U.S. States",
+    "section": "",
+    "text": "library(tidyverse)"
+  },
+  {
+    "objectID": "proposal.html#dataset",
+    "href": "proposal.html#dataset",
+    "title": "Timely and Effective Care Across U.S. States",
+    "section": "Dataset",
+    "text": "Dataset\n\ncare &lt;- read_csv(\"data/care_state.csv\")\nstate_pop &lt;- read_csv(\"data/state_population.csv\")\nglimpse(care)\n\nRows: 1,232\nColumns: 8\n$ state        &lt;chr&gt; \"AK\", \"AK\", \"AK\", \"AK\", \"AK\", \"AK\", \"AK\", \"AK\", \"AK\", \"AK…\n$ condition    &lt;chr&gt; \"Healthcare Personnel Vaccination\", \"Healthcare Personnel…\n$ measure_id   &lt;chr&gt; \"HCP_COVID_19\", \"IMM_3\", \"OP_18b\", \"OP_18b_HIGH_MIN\", \"OP…\n$ measure_name &lt;chr&gt; \"Percentage of healthcare personnel who are up to date wi…\n$ score        &lt;dbl&gt; 7.3, 80.0, 140.0, 157.0, 136.0, 136.0, NA, 196.0, 230.0, …\n$ footnote     &lt;chr&gt; NA, NA, \"25, 26\", \"25, 26\", \"25, 26\", \"25, 26\", \"25, 26\",…\n$ start_date   &lt;date&gt; 2024-01-01, 2023-10-01, 2023-04-01, 2023-04-01, 2023-04-…\n$ end_date     &lt;date&gt; 2024-03-31, 2024-03-31, 2024-03-31, 2024-03-31, 2024-03-…\n\n\nThe dataset is the Centers for Medicare & Medicaid Services (CMS) “Timely and Effective Care” collection, sourced from data.cms.gov and curated for TidyTuesday week 14, 2025. It reports state-level hospital quality measures for reporting periods spanning 2023–2024. The file care_state.csv holds 1232 observations of 8 variables, covering 56 jurisdictions (50 states, DC, and U.S. territories) and 22 distinct measures grouped into 6 condition areas. The data are stored in a long/tidy layout, one row per state-and-measure, so each analysis pivots the relevant subset wider. The key variables are state and condition (categorical), measure_id/measure_name (the metric being reported), and score (the numerical value, whose units and direction differ by measure).\nI chose this dataset because emergency-department crowding and hospital care quality are active national policy concerns, the data are recent and federally maintained, and the structure cleanly satisfies our need for both numerical (score, state population) and categorical (condition, Census region) variables. It also lets us recode a meaningful geographic grouping and merge in external population data to enrich the analysis.\nI derive two variables used across the questions. region is the four-level U.S. Census region (Northeast, Midwest, South, West) recoded from each state code, and state_pop is the state’s 2024 population, merged from a small Census-estimate file committed to /data."
+  },
+  {
+    "objectID": "proposal.html#questions",
+    "href": "proposal.html#questions",
+    "title": "Timely and Effective Care Across U.S. States",
+    "section": "Questions",
+    "text": "Questions\nQuestion 1 — Emergency-department throughput. How does the median time patients spend in the emergency department before leaving (OP_18b) vary by ED volume tier (low through very high, captured by the OP_18b_*_MIN measures) and Census region, and is it associated with state population?\nQuestion 2 — Treatment effectiveness. Across Census regions, how do states compare on treatment-effectiveness measures, stroke CT timeliness (OP_23), colonoscopy follow-up appropriateness (OP_29), and safe opioid use (SAFE_USE_OF_OPIOIDS), and do states that score well on one tend to score well on the others?\nThese questions are distinct: Question 1 uses the ED-timing measures plus population, while Question 2 uses three effectiveness measures; they share only the derived region variable. Because the data are observational, we will frame all findings as associations and avoid causal language."
+  },
+  {
+    "objectID": "proposal.html#analysis-plan",
+    "href": "proposal.html#analysis-plan",
+    "title": "Timely and Effective Care Across U.S. States",
+    "section": "Analysis plan",
+    "text": "Analysis plan\nQuestion 1 (ED throughput). Filter to condition == \"Emergency Department\", keep the volume-stratified OP_18b_LOW_MIN, OP_18b_MEDIUM_MIN, OP_18b_HIGH_MIN, and OP_18b_VERY_HIGH_MIN measures, and pivot so each state has one wait-time value per volume tier. Join region and state_pop. Variables involved: ED wait time (numerical), volume tier (categorical), region (categorical), and state population (numerical), four variables. Planned ggplot2 figures: (1) boxplots of wait time by volume tier, colored or faceted by region; (2) a scatter of state population versus median ED wait time.\nQuestion 2 (treatment effectiveness). Filter to the three effectiveness measures, pivot them wide so each state has one column per measure, and join region. We will first confirm each measure’s direction (“higher is better” versus “lower is better”) from measure_name. Variables involved: OP_23, OP_29, and SAFE_USE_OF_OPIOIDS scores (numerical) plus region (categorical), more than two variables. Planned ggplot2 figures: (1) a regional comparison of the measures (e.g., point-range or bar summaries by region); (2) a scatter relating two measures across states to assess whether strong performance on one accompanies strong performance on another.\nDerived variables. region is built from base R’s state.abb/state.region (recoding “North Central” to “Midwest” and assigning DC to the South). state_pop is merged from data/state_population.csv. Territories lacking a Census region or population estimate will be dropped from the relevant analyses and this exclusion will be reported."
+  },
+  {
+    "objectID": "proposal.html#weekly-plan-of-attack",
+    "href": "proposal.html#weekly-plan-of-attack",
+    "title": "Timely and Effective Care Across U.S. States",
+    "section": "Weekly plan of attack",
+    "text": "Weekly plan of attack\n\n\n\n\n\n\n\n\n\n\nTask Name\nStatus\nDue\nPriority\nSummary\n\n\n\n\nFinalize dataset & draft proposal\nComplete\nJun 4\nHigh\nLoad data, write Q1/Q2, complete proposal.qmd and data README\n\n\nSubmit proposal for peer review\nComplete\nJun 4, 5pm\nHigh\nRender and push proposal\n\n\nAddress peer-review issues\nNot started\nJun 9, 5pm\nHigh\nRevise proposal and close GitHub issues\n\n\nData wrangling (region, population, pivots)\nNot started\nJun 13\nHigh\nBuild clean tidy frames for both questions\n\n\nQuestion 1 analysis & figures\nNot started\nJun 18\nModerate\nED throughput plots and discussion\n\n\nQuestion 2 analysis & figures\nNot started\nJun 23\nModerate\nEffectiveness plots and discussion\n\n\nWrite-up (index.qmd) & website\nNot started\nJun 27\nModerate\nIntroduction, both questions, conclusions\n\n\nSlides & recorded presentation\nNot started\nJun 30, 5pm\nHigh\n~6 content slides, presentation under 5 minutes"
+  },
+  {
+    "objectID": "index.html",
+    "href": "index.html",
+    "title": "Timely and Effective Care Across U.S. States",
+    "section": "",
+    "text": "This project examines hospital quality at the U.S. state level using the Centers for Medicare & Medicaid Services (CMS) “Timely and Effective Care” dataset, curated for TidyTuesday (week 14, 2025). The data cover 22 measures across 56 jurisdictions - 50 states, the District of Columbia, and U.S. territories for 2023–2024 reporting periods, recorded in a long/tidy layout of one row per state and measure. To enable richer comparisons, we derive a four-level U.S. Census region from each state code and merge in 2024 state population estimates.\nWe pursue two distinct questions. The first asks how the median time patients spend in the emergency department before leaving varies by ED patient-volume tier and Census region, and whether it tracks state population. The second asks how states compare across treatment-effectiveness measures, stroke CT timeliness, colonoscopy follow-up appropriateness, safe opioid use, and whether strong performance on one measure tends to accompany strong performance on the others.\nOur approach pivots the relevant measures into a tidy, state-level frame for each question, joins the derived region and population variables, and visualizes the patterns with ggplot2. Because the data are observational, all findings are framed as associations rather than causal effects."
+  },
+  {
+    "objectID": "index.html#abstract",
+    "href": "index.html#abstract",
+    "title": "Timely and Effective Care Across U.S. States",
+    "section": "",
+    "text": "This project examines hospital quality at the U.S. state level using the Centers for Medicare & Medicaid Services (CMS) “Timely and Effective Care” dataset, curated for TidyTuesday (week 14, 2025). The data cover 22 measures across 56 jurisdictions - 50 states, the District of Columbia, and U.S. territories for 2023–2024 reporting periods, recorded in a long/tidy layout of one row per state and measure. To enable richer comparisons, we derive a four-level U.S. Census region from each state code and merge in 2024 state population estimates.\nWe pursue two distinct questions. The first asks how the median time patients spend in the emergency department before leaving varies by ED patient-volume tier and Census region, and whether it tracks state population. The second asks how states compare across treatment-effectiveness measures, stroke CT timeliness, colonoscopy follow-up appropriateness, safe opioid use, and whether strong performance on one measure tends to accompany strong performance on the others.\nOur approach pivots the relevant measures into a tidy, state-level frame for each question, joins the derived region and population variables, and visualizes the patterns with ggplot2. Because the data are observational, all findings are framed as associations rather than causal effects."
+  },
+  {
+    "objectID": "presentation.html#quarto",
+    "href": "presentation.html#quarto",
+    "title": "Timely and Effective Care Across U.S. States",
+    "section": "Quarto",
+    "text": "Quarto\n\nThe presentation is created using the Quarto CLI\n## sets the start of a new slide"
+  },
+  {
+    "objectID": "presentation.html#layouts",
+    "href": "presentation.html#layouts",
+    "title": "Timely and Effective Care Across U.S. States",
+    "section": "Layouts",
+    "text": "Layouts\nYou can use plain text\n\n\n\nor bullet points1\n\n\nor in two columns\n\n\nlike\nthis\n\nAnd add footnotes"
+  },
+  {
+    "objectID": "presentation.html#code",
+    "href": "presentation.html#code",
+    "title": "Timely and Effective Care Across U.S. States",
+    "section": "Code",
+    "text": "Code\n\n\n# A tibble: 2 × 5\n  term        estimate std.error statistic       p.value\n  &lt;chr&gt;          &lt;dbl&gt;     &lt;dbl&gt;     &lt;dbl&gt;         &lt;dbl&gt;\n1 (Intercept)   25.3      3.08        8.22 0.00000000358\n2 speed         -0.116    0.0642     -1.81 0.0806       \n\n\n# A tibble: 1 × 12\n  r.squared adj.r.squared sigma statistic p.value    df logLik   AIC   BIC\n      &lt;dbl&gt;         &lt;dbl&gt; &lt;dbl&gt;     &lt;dbl&gt;   &lt;dbl&gt; &lt;dbl&gt;  &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt;\n1    0.0983        0.0682  5.82      3.27  0.0806     1  -101.  207.  212.\n# ℹ 3 more variables: deviance &lt;dbl&gt;, df.residual &lt;int&gt;, nobs &lt;int&gt;"
+  },
+  {
+    "objectID": "presentation.html#plots",
+    "href": "presentation.html#plots",
+    "title": "Timely and Effective Care Across U.S. States",
+    "section": "Plots",
+    "text": "Plots"
+  },
+  {
+    "objectID": "presentation.html#plot-and-text",
+    "href": "presentation.html#plot-and-text",
+    "title": "Timely and Effective Care Across U.S. States",
+    "section": "Plot and text",
+    "text": "Plot and text\n\n\n\nSome text\ngoes here"
+  },
+  {
+    "objectID": "presentation.html#tables",
+    "href": "presentation.html#tables",
+    "title": "Timely and Effective Care Across U.S. States",
+    "section": "Tables",
+    "text": "Tables\nIf you want to generate a table, make sure it is in the HTML format (instead of Markdown or other formats), e.g.,\n\n\n\n\n\nspecies\nisland\nbill_length_mm\nbill_depth_mm\nflipper_length_mm\nbody_mass_g\nsex\n\n\n\n\nAdelie\nTorgersen\n39.1\n18.7\n181\n3750\nmale\n\n\nAdelie\nTorgersen\n39.5\n17.4\n186\n3800\nfemale\n\n\nAdelie\nTorgersen\n40.3\n18.0\n195\n3250\nfemale\n\n\nAdelie\nTorgersen\nNA\nNA\nNA\nNA\nNA\n\n\nAdelie\nTorgersen\n36.7\n19.3\n193\n3450\nfemale\n\n\nAdelie\nTorgersen\n39.3\n20.6\n190\n3650\nmale"
+  },
+  {
+    "objectID": "presentation.html#images",
+    "href": "presentation.html#images",
+    "title": "Timely and Effective Care Across U.S. States",
+    "section": "Images",
+    "text": "Images\n\nImage credit: Danielle Navarro, Percolate."
+  },
+  {
+    "objectID": "presentation.html#math-expressions",
+    "href": "presentation.html#math-expressions",
+    "title": "Timely and Effective Care Across U.S. States",
+    "section": "Math Expressions",
+    "text": "Math Expressions\nYou can write LaTeX math expressions inside a pair of dollar signs, e.g. $\\alpha+\\beta$ renders \\(\\alpha + \\beta\\). You can use the display style with double dollar signs:\n$$\\bar{X}=\\frac{1}{n}\\sum_{i=1}^nX_i$$\n\\[\n\\bar{X}=\\frac{1}{n}\\sum_{i=1}^nX_i\n\\]\nLimitations:\n\nThe source code of a LaTeX math expression must be in one line, unless it is inside a pair of double dollar signs, in which case the starting $$ must appear in the very beginning of a line, followed immediately by a non-space character, and the ending $$ must be at the end of a line, led by a non-space character;\nThere should not be spaces after the opening $ or before the closing $."
+  },
+  {
+    "objectID": "presentation.html#feeling-adventurous",
+    "href": "presentation.html#feeling-adventurous",
+    "title": "Timely and Effective Care Across U.S. States",
+    "section": "Feeling adventurous?",
+    "text": "Feeling adventurous?\n\nYou are welcomed to use the default styling of the slides. In fact, that’s what I expect majority of you will do. You will differentiate yourself with the content of your presentation.\nBut some of you might want to play around with slide styling. Some solutions for this can be found at https://quarto.org/docs/presentations/revealjs."
+  },
+  {
+    "objectID": "about.html",
+    "href": "about.html",
+    "title": "About",
+    "section": "",
+    "text": "This project was developed by Christopher Paskins for INFO 526 - Data Analysis and Visualization at the University of Arizona, taught by Dr. Greg Chism. The team is comprised of the following team members.\n\nTeam member 1: Christopher Paskins, Graduate Student, MSDS."
+  }
+]
