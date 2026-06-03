@@ -1,11 +1,11 @@
 ---
-title: "Project Title"
+title: "Timely and Effective Care Across U.S. States"
 subtitle: "INFO 526 - Summer 2024 - Final Project"
-author: 
-  - name: "Team name"
+author:
+  - name: "Christopher Paskins"
     affiliations:
       - name: "School of Information, University of Arizona"
-description: "Project description"
+description: "A state-level look at emergency-department throughput and treatment-effectiveness using CMS Timely and Effective Care data."
 format:
    html:
     code-tools: true
@@ -19,4 +19,8 @@ execute:
 
 ## Abstract
 
-Add project abstract here.
+This project examines hospital quality at the U.S. state level using the Centers for Medicare & Medicaid Services (CMS) "Timely and Effective Care" dataset, curated for TidyTuesday (week 14, 2025). The data cover 22 measures across 56 jurisdictions - 50 states, the District of Columbia, and U.S. territories for 2023–2024 reporting periods, recorded in a long/tidy layout of one row per state and measure. To enable richer comparisons, we derive a four-level U.S. Census region from each state code and merge in 2024 state population estimates.
+
+We pursue two distinct questions. The first asks how the median time patients spend in the emergency department before leaving varies by ED patient-volume tier and Census region, and whether it tracks state population. The second asks how states compare across treatment-effectiveness measures, stroke CT timeliness, colonoscopy follow-up appropriateness, safe opioid use, and whether strong performance on one measure tends to accompany strong performance on the others.
+
+Our approach pivots the relevant measures into a tidy, state-level frame for each question, joins the derived region and population variables, and visualizes the patterns with `ggplot2`. Because the data are observational, all findings are framed as associations rather than causal effects.
