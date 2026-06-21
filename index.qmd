@@ -1,6 +1,6 @@
 ---
 title: "Timely and Effective Care Across U.S. States"
-subtitle: "INFO 526 - Summer 2024 - Final Project"
+subtitle: "INFO 526 - Summer 2026 - Final Project"
 author:
   - name: "Christopher Paskins"
     affiliations:
