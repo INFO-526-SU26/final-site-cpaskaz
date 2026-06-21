@@ -1,165 +1,316 @@
 ---
 title: "Timely and Effective Care Across U.S. States"
-subtitle: "INFO 526 - Summer 2024 - Final Project"
+subtitle: "Crowding drives ER waits · Care quality is not one single trait · INFO 526 Final Project"
 author: "Christopher Paskins"
-title-slide-attributes:
-  data-background-image: images/watercolour_sys02_img34_teacup-ocean.jpg
-  data-background-size: stretch
-  data-background-opacity: "0.7"
-  data-slide-number: none
 format:
   revealjs:
-    theme:  ['data/customtheming.scss']
-  
+    theme: [default, data/customtheming.scss]
+    slide-number: c/t
+    show-slide-number: all
+    transition: fade
+    transition-speed: fast
+    incremental: true
+    highlight-style: github
+    fig-align: center
 editor: visual
 execute:
   echo: false
+  warning: false
+  message: false
 ---
-
-```{r}
-#| label: load-packages
-#| include: false
-
-# Load packages here
-pacman::p_load(tidymodels,
-               tidyverse)
-
-```
 
 ```{r}
 #| label: setup
 #| include: false
+library(tidyverse)
+library(maps)
 
-# Plot theme
-ggplot2::theme_set(ggplot2::theme_minimal(base_size = 11))
+care <- read_csv("data/care_state.csv")
+pop  <- read_csv("data/state_population.csv")
 
-# For better figure resolution
-knitr::opts_chunk$set(
-  fig.retina = 3, 
-  dpi = 300, 
-  fig.width = 6, 
-  fig.asp = 0.618 
+# Figures styled to blend into the dark slides
+theme_slides <- theme_minimal(base_size = 15) +
+  theme(
+    plot.background  = element_rect(fill = "transparent", color = NA),
+    panel.background = element_rect(fill = "transparent", color = NA),
+    legend.background = element_rect(fill = "transparent", color = NA),
+    panel.grid.major = element_line(color = "#2b4258", linewidth = 0.3),
+    panel.grid.minor = element_blank(),
+    text        = element_text(color = "#e2e8f0"),
+    axis.text   = element_text(color = "#b6c2cf"),
+    axis.title  = element_text(color = "#e2e8f0"),
+    plot.title  = element_text(color = "#ffffff", face = "bold"),
+    strip.text  = element_text(color = "#e2e8f0", face = "bold"),
+    legend.text = element_text(color = "#e2e8f0"),
+    legend.title = element_text(color = "#e2e8f0")
+  )
+theme_set(theme_slides)
+knitr::opts_chunk$set(dev.args = list(bg = "transparent"))
+
+# One consistent region color mapping used across every categorical chart
+region_pal <- c("Northeast" = "#2dd4bf", "Midwest" = "#fbbf24",
+                "South" = "#f472b6", "West" = "#60a5fa")
+
+region_lookup <- tibble(state = state.abb, region = as.character(state.region)) |>
+  mutate(region = recode(region, "North Central" = "Midwest")) |>
+  bind_rows(tibble(state = "DC", region = "South")) |>
+  mutate(region = factor(region, levels = c("Northeast", "Midwest", "South", "West")))
+
+ed_overall <- care |>
+  filter(measure_id == "OP_18b") |>
+  select(state, wait_min = score) |>
+  inner_join(region_lookup, by = "state") |>
+  inner_join(pop, by = "state")
+
+ed_tiers <- care |>
+  filter(measure_id %in% c("OP_18b_LOW_MIN", "OP_18b_MEDIUM_MIN",
+                           "OP_18b_HIGH_MIN", "OP_18b_VERY_HIGH_MIN")) |>
+  transmute(state, score,
+            tier = recode(measure_id,
+                          OP_18b_LOW_MIN = "Low", OP_18b_MEDIUM_MIN = "Medium",
+                          OP_18b_HIGH_MIN = "High", OP_18b_VERY_HIGH_MIN = "Very High")) |>
+  mutate(tier = factor(tier, levels = c("Low", "Medium", "High", "Very High"))) |>
+  inner_join(region_lookup, by = "state") |>
+  drop_na(score)
+
+# All three effectiveness measures re-oriented so HIGHER = BETTER
+effect <- care |>
+  filter(measure_id %in% c("OP_23", "OP_29", "SAFE_USE_OF_OPIOIDS")) |>
+  select(state, measure_id, score) |>
+  pivot_wider(names_from = measure_id, values_from = score) |>
+  mutate(avoid_opioids = 100 - SAFE_USE_OF_OPIOIDS) |>
+  inner_join(region_lookup, by = "state")
+
+effect_long <- effect |>
+  pivot_longer(c(OP_23, OP_29, avoid_opioids),
+               names_to = "measure", values_to = "score") |>
+  mutate(measure = recode(measure,
+    OP_23 = "Stroke scan in 45 min",
+    OP_29 = "Colonoscopy follow-up",
+    avoid_opioids = "Avoided concurrent opioids")) |>
+  drop_na(score)
+
+pairs <- bind_rows(
+  effect |> transmute(pair = "Stroke vs colonoscopy", x = OP_23, y = OP_29),
+  effect |> transmute(pair = "Stroke vs opioid safety", x = OP_23, y = avoid_opioids),
+  effect |> transmute(pair = "Colonoscopy vs opioid safety", x = OP_29, y = avoid_opioids)
+) |>
+  drop_na()
+
+pair_r <- pairs |>
+  group_by(pair) |>
+  summarise(r = cor(x, y), xpos = min(x), ypos = max(y), .groups = "drop")
+
+# Choropleth frame for ER wait time
+wait_map <- tibble(state = state.abb, mapname = tolower(state.name)) |>
+  inner_join(ed_overall |> select(state, wait_min), by = "state")
+map_df <- map_data("state") |>
+  left_join(wait_map, by = c("region" = "mapname"))
+
+# Inline numbers
+r_pop   <- round(cor(log10(ed_overall$population), ed_overall$wait_min), 2)
+ne_wait <- round(median(ed_overall$wait_min[ed_overall$region == "Northeast"]))
+mw_wait <- round(median(ed_overall$wait_min[ed_overall$region == "Midwest"]))
+low_w   <- round(median(ed_tiers$score[ed_tiers$tier == "Low"]))
+vhigh_w <- round(median(ed_tiers$score[ed_tiers$tier == "Very High"]))
+gap_min <- vhigh_w - low_w
+n_q2    <- nrow(drop_na(effect, OP_23, OP_29, avoid_opioids))
+r_2329  <- round(cor(effect$OP_23, effect$OP_29, use = "complete.obs"), 2)
+r_23op  <- round(cor(effect$OP_23, effect$avoid_opioids, use = "complete.obs"), 2)
+r_29op  <- round(cor(effect$OP_29, effect$avoid_opioids, use = "complete.obs"), 2)
+```
+
+## Bottom line up front {.center}
+
+[The two findings]{.kicker}
+
+-   **ER waits are about crowding, not geography or size.** How busy a room is drives waiting far more than which state it is in, and big states are not the slow ones.
+-   **Care quality is not one single trait.** A state strong on one kind of care is no more likely to be strong on the others. This was the surprise.
+
+## Why this matters
+
+-   Long emergency room waits and uneven care quality are the most visible signs of a health system under strain.
+-   The federal government measures both, state by state, but the numbers rarely get told as a story.
+-   I set out to answer two plain questions and let the data push back on my assumptions.
+
+## The data
+
+::: bigstat
+`r n_distinct(care$measure_id)` measures · `r n_distinct(care$state)` jurisdictions · 2 years
+:::
+
+[CMS "Timely and Effective Care," via TidyTuesday 2025-04-08]{.statlabel}
+
+-   One row per state and measure, reshaped for each question.
+-   I added two variables of my own: each state's **Census region** and its **2024 population**.
+-   All findings are **associations**, not causes, since the data are observational.
+
+# Question 1 {background-color="#0d6b73"}
+
+How long do patients wait in the ER, and why?
+
+## The Northeast waits the longest
+
+::::: columns
+::: {.column width="62%"}
+```{r}
+#| label: q1-map
+#| fig-width: 6.6
+#| fig-asp: 0.66
+ggplot(map_df, aes(long, lat, group = group, fill = wait_min)) +
+  geom_polygon(color = "#0b1622", linewidth = 0.15) +
+  coord_quickmap() +
+  scale_fill_gradient(low = "#a7f3d0", high = "#0f766e",
+                      na.value = "#334155", name = "Minutes") +
+  theme_void() +
+  theme(
+    plot.background = element_rect(fill = "transparent", color = NA),
+    legend.text  = element_text(color = "#e2e8f0"),
+    legend.title = element_text(color = "#e2e8f0")
   )
 ```
-
-```{r}
-#| label: load-data
-#| include: false
-# Load data here
-data(mtcars)
-mtcars$speed <- mtcars$hp / mtcars$wt
-
-data("penguins")
-```
-
-# Using Quarto for presentations
-
-## Quarto
-
--   The presentation is created using the Quarto CLI
-
--   `##` sets the start of a new slide
-
-## Layouts
-
-You can use plain text
-
-::::: columns
-::: {.column width="40%"}
--   or bullet points[^1]
 :::
 
+::: {.column width="38%"}
+-   Darker states wait longer.
+-   The **Northeast** is slowest, at a median of **`r ne_wait` min**.
+-   The **Midwest** is fastest, at **`r mw_wait` min**.
+-   Region matters, but as we will see, it is not the main driver.
+:::
+:::::
+
+## Busier rooms, longer waits
+
+::::: columns
 ::: {.column width="60%"}
-or in two columns
+```{r}
+#| label: q1-tiers
+#| fig-width: 6.4
+#| fig-asp: 0.82
+slope_df  <- ed_tiers |>
+  group_by(region, tier) |>
+  summarise(med = median(score), .groups = "drop")
+slope_lab <- filter(slope_df, tier == "Very High")
+
+ggplot(slope_df, aes(x = tier, y = med, color = region, group = region)) +
+  geom_line(linewidth = 1.2) +
+  geom_point(size = 2.8) +
+  geom_text(data = slope_lab, aes(label = region),
+            hjust = -0.12, size = 4.2, fontface = "bold") +
+  scale_color_manual(values = region_pal) +
+  scale_x_discrete(expand = expansion(add = c(0.15, 1.2))) +
+  labs(x = "ER volume tier", y = "Median time in ER (minutes)") +
+  theme(legend.position = "none")
+```
+:::
+
+::: {.column width="40%"}
+-   Wait climbs from about **`r low_w` min** to **`r vhigh_w` min** as volume rises.
+-   That is **`r gap_min` extra minutes**, more than an hour longer.
+-   **Every region** shows the same upward slope.
 :::
 :::::
 
-[^1]: And add footnotes
-
--   like
-
--   this
-
-## Code
-
-```{r, echo=FALSE}
-model <- lm(mpg ~ speed, data = mtcars) 
-
-model |> tidy()
-
-model |> glance()
-
-```
-
-## Plots
-
-```{r}
-penguins |>
-  mutate(species = ifelse(species == "Adelie", "Adelie", "Other")) |>
-  ggplot(aes(x = flipper_length_mm, y = body_mass_g, color = species)) +
-  geom_point()
-```
-
-## Plot and text
+## Size is not the culprit
 
 ::::: columns
-::: {.column width="50%"}
--   Some text
-
--   goes here
+::: {.column width="60%"}
+```{r}
+#| label: q1-pop
+#| fig-width: 6.2
+#| fig-asp: 0.9
+ggplot(ed_overall, aes(x = population, y = wait_min)) +
+  geom_point(aes(color = region), size = 3, alpha = 0.9) +
+  geom_smooth(method = "lm", se = FALSE, color = "#fbbf24", linetype = "dashed") +
+  annotate("text", x = 7e5, y = max(ed_overall$wait_min),
+           label = paste0("r = ", r_pop, "  (essentially flat)"),
+           color = "#fbbf24", hjust = 0, vjust = 1, size = 5, fontface = "bold") +
+  scale_x_log10(labels = scales::label_number(scale_cut = scales::cut_short_scale())) +
+  scale_color_manual(values = region_pal) +
+  labs(x = "State population (log scale)",
+       y = "Median time in ER (minutes)", color = "Region")
+```
 :::
 
-::: {.column width="50%"}
-```{r, warning=FALSE, fig.width=5.5}
-penguins |>
-  ggplot(aes(x = bill_length_mm, y = species, color = species)) +
-  geom_boxplot(linewidth = 0.75,
-               outlier.size = 2.5) +
-  theme_minimal(base_size = 15) +
-  theme(legend.key.size = unit(0.8, "cm"))
-```
+::: {.column width="40%"}
+-   Population barely moves wait time (correlation of only **`r r_pop`** on a log scale).
+-   Big states are **not** the slow ones.
+-   Crowding, not size, is what counts.
 :::
 :::::
 
-# A new section...
+# Question 2 {background-color="#0d6b73"}
 
-## Tables
+If a state does well on one kind of care, does it do well on the others?
 
-If you want to generate a table, make sure it is in the HTML format (instead of Markdown or other formats), e.g.,
+## Regional gaps are small
 
+::::: columns
+::: {.column width="58%"}
 ```{r}
-penguins |> 
-  head() |>
-  kableExtra::kable() |>
-  kableExtra::kable_styling()
+#| label: q2-region
+#| fig-width: 6.4
+#| fig-asp: 0.95
+effect_long |>
+  group_by(region, measure) |>
+  summarise(mean_score = mean(score), .groups = "drop") |>
+  ggplot(aes(x = region, y = mean_score, fill = region)) +
+  geom_col(show.legend = FALSE, alpha = 0.95) +
+  geom_text(aes(label = round(mean_score, 1)), vjust = -0.4,
+            color = "#e2e8f0", size = 4.2) +
+  facet_wrap(~ measure, ncol = 1, scales = "free_y") +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.18))) +
+  scale_fill_manual(values = region_pal) +
+  labs(x = NULL, y = "Regional average (percent)")
 ```
+:::
 
-## Images
+::: {.column width="42%"}
+-   Three very different measures, all oriented so **higher is better**.
+-   No region pulls clearly ahead on **all three** at once.
+-   The differences between regions are **small**.
+:::
+:::::
 
-![Image credit: Danielle Navarro, Percolate.](images/watercolour_sys02_img34_teacup-ocean.png){fig-align="center" width="500"}
+## No all-around winners
 
-## Math Expressions {.smaller}
-
-You can write LaTeX math expressions inside a pair of dollar signs, e.g. \$\\alpha+\\beta\$ renders $\alpha + \beta$. You can use the display style with double dollar signs:
-
-```         
-$$\bar{X}=\frac{1}{n}\sum_{i=1}^nX_i$$
+::::: columns
+::: {.column width="48%"}
+```{r}
+#| label: q2-pairs
+#| fig-width: 5.0
+#| fig-asp: 1.15
+ggplot(pairs, aes(x = x, y = y)) +
+  geom_point(alpha = 0.8, color = "#2dd4bf", size = 2.2) +
+  geom_smooth(method = "lm", se = FALSE, color = "#fbbf24", linetype = "dashed") +
+  geom_text(data = pair_r, aes(x = xpos, y = ypos, label = paste0("r = ", sprintf("%+.2f", r))),
+            color = "#fbbf24", hjust = 0, vjust = 1, size = 4.4,
+            fontface = "bold", inherit.aes = FALSE) +
+  facet_wrap(~ pair, ncol = 1, scales = "free") +
+  labs(x = "First measure (percent)", y = "Second measure (percent)")
 ```
+:::
 
-$$
-\bar{X}=\frac{1}{n}\sum_{i=1}^nX_i
-$$
+::: {.column width="52%"}
+-   Every pairing is a loose cloud with a nearly flat trend.
+-   Correlations near zero: **`r r_2329`**, **`r r_23op`**, **`r r_29op`**.
+-   **None are statistically significant** (n = `r n_q2`).
+-   Doing well on one measure **does not predict** the others.
+:::
+:::::
 
-Limitations:
+## Conclusions {.center}
 
-1.  The source code of a LaTeX math expression must be in one line, unless it is inside a pair of double dollar signs, in which case the starting `$$` must appear in the very beginning of a line, followed immediately by a non-space character, and the ending `$$` must be at the end of a line, led by a non-space character;
+[What it means]{.kicker}
 
-2.  There should not be spaces after the opening `$` or before the closing `$`.
+-   **Crowding drives ER waits far more than geography or state size**, and big states are not the slow ones.
+-   **State care quality is not one single trait.** Strength in one area travels only weakly to others.
+-   These are associations from one snapshot, so they describe patterns, not causes.
+-   **Recommendations and next steps:** add a rural versus urban dimension, if the data can be found, to drill further into where these differences come from.
 
-# Wrap up
+## Thank you {.center}
 
-## Feeling adventurous?
+[Christopher Paskins · INFO 526]{.kicker}
 
--   You are welcomed to use the default styling of the slides. In fact, that's what I expect majority of you will do. You will differentiate yourself with the content of your presentation.
-
--   But some of you might want to play around with slide styling. Some solutions for this can be found at https://quarto.org/docs/presentations/revealjs.
+-   Data: CMS Timely and Effective Care, via TidyTuesday 2025-04-08.
+-   Full write-up and code: project website and repository.

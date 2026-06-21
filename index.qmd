@@ -5,22 +5,239 @@ author:
   - name: "Christopher Paskins"
     affiliations:
       - name: "School of Information, University of Arizona"
-description: "A state-level look at emergency-department throughput and treatment-effectiveness using CMS Timely and Effective Care data."
+description: "A state-level look at emergency department throughput and treatment effectiveness using CMS Timely and Effective Care data."
 format:
-   html:
+  html:
     code-tools: true
     code-overflow: wrap
     embed-resources: true
 editor: visual
 execute:
   warning: false
+  message: false
   echo: false
 ---
 
+```{r}
+#| label: setup
+#| include: false
+library(tidyverse)
+library(maps)
+
+care <- read_csv("data/care_state.csv")
+pop  <- read_csv("data/state_population.csv")
+
+# Census region recoded from the state code, with DC placed in the South.
+region_lookup <- tibble(state = state.abb, region = as.character(state.region)) |>
+  mutate(region = recode(region, "North Central" = "Midwest")) |>
+  bind_rows(tibble(state = "DC", region = "South")) |>
+  mutate(region = factor(region, levels = c("Northeast", "Midwest", "South", "West")))
+
+theme_set(theme_minimal(base_size = 12))
+```
+
 ## Abstract
 
-This project examines hospital quality at the U.S. state level using the Centers for Medicare & Medicaid Services (CMS) "Timely and Effective Care" dataset, curated for TidyTuesday (week 14, 2025). The data cover 22 measures across 56 jurisdictions - 50 states, the District of Columbia, and U.S. territories for 2023–2024 reporting periods, recorded in a long/tidy layout of one row per state and measure. To enable richer comparisons, we derive a four-level U.S. Census region from each state code and merge in 2024 state population estimates.
+This project looks at hospital quality at the state level using the Centers for Medicare and Medicaid Services (CMS) "Timely and Effective Care" data, which was shared through TidyTuesday in week 14 of 2025. The data cover `r n_distinct(care$measure_id)` measures across `r n_distinct(care$state)` jurisdictions, made up of the 50 states, the District of Columbia, and several U.S. territories, for reporting periods in 2023 and 2024. I ask two separate questions. The first is about how long patients wait in the emergency room and what that waiting is tied to, and the second is about whether states that do well on one kind of treatment also tend to do well on others. All of the findings are described as associations, since the data are observational and cannot tell us about cause and effect.
 
-We pursue two distinct questions. The first asks how the median time patients spend in the emergency department before leaving varies by ED patient-volume tier and Census region, and whether it tracks state population. The second asks how states compare across treatment-effectiveness measures, stroke CT timeliness, colonoscopy follow-up appropriateness, safe opioid use, and whether strong performance on one measure tends to accompany strong performance on the others.
+## Introduction
 
-Our approach pivots the relevant measures into a tidy, state-level frame for each question, joins the derived region and population variables, and visualizes the patterns with `ggplot2`. Because the data are observational, all findings are framed as associations rather than causal effects.
+Every row in the data records one quality measure for one state, so the file is long and tidy rather than wide. The numbers come straight from CMS, the federal agency that runs Medicare, and they describe real hospital performance, things like how fast a stroke patient gets a brain scan or how long someone sits in the emergency room before leaving. Because the scores are reported per state, they give a clean way to compare the country region by region. To make those comparisons easier I add two pieces of information of my own. I group each state into one of the four U.S. Census regions, and I attach each state's 2024 population so I can check whether size has anything to do with performance.
+
+The two questions below use different measures on purpose, so they tell two different stories. The first question leans on the emergency department timing measures and on population. The second question leans on three treatment effectiveness measures. The only thing they share is the region grouping, which lets each question keep its own focus while still being read on the same map of the country.
+
+## Question 1: Where do patients wait the longest in the emergency room, and why?
+
+### Introduction
+
+Long emergency room waits are one of the most visible signs of a hospital under strain, and they matter for patients who are sick and scared. The measure I use here, `OP_18b`, is the median number of minutes a patient spends in the emergency department before leaving, where a lower number is better. I want to know two things. Do busier emergency rooms make people wait longer, and does where you live, or how big your state is, change the picture?
+
+### Approach
+
+I pull out the overall emergency room wait time for each state along with the four versions of that measure that are broken out by how busy the emergency room is, from low volume up to very high volume. I then attach each state's region and population. To answer the question I build three views. The first is a map that shows where waits are longest, the second is a set of boxplots that show how wait times spread out across the volume tiers within each region, and the third is a scatter plot that puts state population against the overall wait time to see if larger states wait longer.
+
+```{r}
+#| label: q1-wrangle
+#| echo: true
+
+# Overall ER wait time per state, joined to region and population.
+ed_overall <- care |>
+  filter(measure_id == "OP_18b") |>
+  select(state, wait_min = score) |>
+  inner_join(region_lookup, by = "state") |>
+  inner_join(pop, by = "state")
+
+# The same wait time, but split by how busy the emergency room is.
+ed_tiers <- care |>
+  filter(measure_id %in% c("OP_18b_LOW_MIN", "OP_18b_MEDIUM_MIN",
+                           "OP_18b_HIGH_MIN", "OP_18b_VERY_HIGH_MIN")) |>
+  transmute(
+    state, score,
+    tier = recode(measure_id,
+                  OP_18b_LOW_MIN = "Low", OP_18b_MEDIUM_MIN = "Medium",
+                  OP_18b_HIGH_MIN = "High", OP_18b_VERY_HIGH_MIN = "Very High")
+  ) |>
+  mutate(tier = factor(tier, levels = c("Low", "Medium", "High", "Very High"))) |>
+  inner_join(region_lookup, by = "state") |>
+  drop_na(score)
+```
+
+### Analysis
+
+```{r}
+#| label: fig-q1-map
+#| echo: true
+#| fig-width: 8
+#| fig-height: 5
+#| fig-cap: "Median emergency room wait time by state. Darker states wait longer."
+
+# Join wait times to U.S. state map polygons.
+wait_map <- tibble(state = state.abb, mapname = tolower(state.name)) |>
+  inner_join(ed_overall |> select(state, wait_min), by = "state")
+map_df <- map_data("state") |>
+  left_join(wait_map, by = c("region" = "mapname"))
+
+ggplot(map_df, aes(long, lat, group = group, fill = wait_min)) +
+  geom_polygon(color = "grey40", linewidth = 0.15) +
+  coord_quickmap() +
+  scale_fill_gradient(low = "#deebf7", high = "#08519c",
+                      na.value = "grey85", name = "Minutes") +
+  labs(title = "The Northeast waits the longest") +
+  theme_void(base_size = 12) +
+  theme(plot.title = element_text(face = "bold"))
+```
+
+```{r}
+#| label: fig-q1-tiers
+#| echo: true
+#| fig-width: 8
+#| fig-height: 5
+#| fig-cap: "Median emergency room wait time by volume tier, shown separately for each Census region."
+
+ggplot(ed_tiers, aes(x = tier, y = score, fill = tier)) +
+  geom_boxplot(show.legend = FALSE, alpha = 0.9) +
+  facet_wrap(~ region) +
+  scale_fill_brewer(palette = "Blues") +
+  labs(
+    x = "Emergency room volume tier",
+    y = "Median time in ER (minutes)",
+    title = "Busier emergency rooms mean longer waits in every region",
+    subtitle = "Each box summarizes the states in that region at that volume level"
+  ) +
+  theme(axis.text.x = element_text(angle = 20, hjust = 1))
+```
+
+```{r}
+#| label: fig-q1-pop
+#| echo: true
+#| fig-width: 8
+#| fig-height: 5
+#| fig-cap: "State population against overall median emergency room wait time, with a dashed trend line."
+
+ggplot(ed_overall, aes(x = population, y = wait_min)) +
+  geom_point(aes(color = region), size = 2.6, alpha = 0.85) +
+  geom_smooth(method = "lm", se = FALSE, color = "grey40", linetype = "dashed") +
+  scale_x_log10(labels = scales::label_number(scale_cut = scales::cut_short_scale())) +
+  scale_color_brewer(palette = "Set2") +
+  labs(
+    x = "State population (log scale)",
+    y = "Median time in ER (minutes)",
+    title = "Bigger states do not have systematically longer ER waits",
+    color = "Region"
+  )
+```
+
+The map and boxplots tell a clear story. The Northeast stands out as the slowest part of the country, and inside every region the typical wait climbs steadily as the emergency room gets busier, going from about `r round(median(ed_tiers$score[ed_tiers$tier=="Low"]))` minutes at low volume hospitals to about `r round(median(ed_tiers$score[ed_tiers$tier=="Very High"]))` minutes at the busiest ones. The scatter plot is the opposite, almost flat. The link between population and wait time is weak, with a correlation of only `r round(cor(log10(ed_overall$population), ed_overall$wait_min), 2)` on a log scale, so a state being large does not mean its patients wait longer.
+
+### Discussion
+
+The strongest signal by far is how busy an emergency room is, not which state it sits in. That said, region still matters at the edges. The Northeast has the slowest typical wait at about `r round(median(ed_overall$wait_min[ed_overall$region=="Northeast"]))` minutes, while the Midwest is the fastest at about `r round(median(ed_overall$wait_min[ed_overall$region=="Midwest"]))` minutes. Population, on the other hand, barely moves the needle, which is a useful thing to know because it is tempting to assume crowded big states must have the worst waits. Since this is observational data, I can say these patterns travel together, but I cannot say that high volume causes the longer waits, even though that is the most natural reading.
+
+## Question 2: Do states that do well on one kind of care also do well on others?
+
+### Introduction
+
+It would be reassuring to think that a state with a strong hospital system is strong across the board, so that good stroke care comes packaged with good cancer screening and safe prescribing. To test that idea I use three treatment effectiveness measures that have nothing to do with emergency room timing. They are the share of stroke patients who get a brain scan within 45 minutes (`OP_23`), the share of patients who get an appropriate colonoscopy follow-up recommendation (`OP_29`), and the rate of concurrent opioid prescribing (`SAFE_USE_OF_OPIOIDS`). The opioid measure is reported as the rate of risky concurrent prescriptions, so I flip it into the share that avoids them, which makes a higher number better for all three and keeps every comparison pointing the same way.
+
+### Approach
+
+I reshape the data so that each state has one column for each of the three measures, then attach its region. With that table I build two views. The first compares the regional average for each measure side by side, and the second plots all three pairs of measures against each other so I can see whether scoring well on one comes with scoring well on another. Because I have already oriented all three measures so that higher is better, a positive relationship would mean a state that is strong on one measure is also strong on the other.
+
+```{r}
+#| label: q2-wrangle
+#| echo: true
+
+# One row per state, one column per effectiveness measure.
+# Flip the opioid measure so that, like the others, higher is better.
+effect <- care |>
+  filter(measure_id %in% c("OP_23", "OP_29", "SAFE_USE_OF_OPIOIDS")) |>
+  select(state, measure_id, score) |>
+  pivot_wider(names_from = measure_id, values_from = score) |>
+  mutate(avoid_opioids = 100 - SAFE_USE_OF_OPIOIDS) |>
+  inner_join(region_lookup, by = "state")
+```
+
+### Analysis
+
+```{r}
+#| label: fig-q2-region
+#| echo: true
+#| fig-width: 9
+#| fig-height: 4.5
+#| fig-cap: "Regional averages for each of the three treatment effectiveness measures."
+
+effect_long <- effect |>
+  pivot_longer(c(OP_23, OP_29, avoid_opioids),
+               names_to = "measure", values_to = "score") |>
+  mutate(measure = recode(measure,
+    OP_23 = "Stroke scan in 45 min",
+    OP_29 = "Colonoscopy follow-up",
+    avoid_opioids = "Avoided concurrent opioids")) |>
+  drop_na(score)
+
+effect_long |>
+  group_by(region, measure) |>
+  summarise(mean_score = mean(score), .groups = "drop") |>
+  ggplot(aes(x = region, y = mean_score, fill = region)) +
+  geom_col(show.legend = FALSE, alpha = 0.9) +
+  facet_wrap(~ measure, scales = "free_y") +
+  scale_fill_brewer(palette = "Set2") +
+  labs(
+    x = NULL,
+    y = "Regional average (percent)",
+    title = "Regional gaps in treatment effectiveness are small",
+    subtitle = "All three measures oriented so higher is better"
+  ) +
+  theme(axis.text.x = element_text(angle = 20, hjust = 1))
+```
+
+```{r}
+#| label: fig-q2-pairs
+#| echo: true
+#| fig-width: 9
+#| fig-height: 4
+#| fig-cap: "All three pairings of the effectiveness measures across states, each with a dashed trend line."
+
+pairs <- bind_rows(
+  effect |> transmute(pair = "Stroke vs colonoscopy",      x = OP_23, y = OP_29),
+  effect |> transmute(pair = "Stroke vs opioid safety",    x = OP_23, y = avoid_opioids),
+  effect |> transmute(pair = "Colonoscopy vs opioid safety", x = OP_29, y = avoid_opioids)
+) |>
+  drop_na()
+
+ggplot(pairs, aes(x = x, y = y)) +
+  geom_point(alpha = 0.7, color = "#1b7837") +
+  geom_smooth(method = "lm", se = FALSE, color = "grey40", linetype = "dashed") +
+  facet_wrap(~ pair, scales = "free") +
+  labs(
+    x = "First measure (percent)",
+    y = "Second measure (percent)",
+    title = "Doing well on one measure does not predict the others"
+  )
+```
+
+The regional bars are strikingly even. No region pulls clearly ahead or clearly behind on all three measures at once, and the up and down differences are small. The pairwise plots back this up. The clouds of points are loose and the trend lines are nearly flat, with correlations of only `r round(cor(effect$OP_23, effect$OP_29, use="complete.obs"), 2)` for stroke care against colonoscopy follow-up, `r round(cor(effect$OP_23, effect$avoid_opioids, use="complete.obs"), 2)` for stroke care against opioid safety, and `r round(cor(effect$OP_29, effect$avoid_opioids, use="complete.obs"), 2)` for colonoscopy follow-up against opioid safety. With only about `r nrow(drop_na(effect, OP_23, OP_29, avoid_opioids))` states reporting all three measures, none of these relationships are strong enough to be statistically meaningful.
+
+### Discussion
+
+The hoped for pattern, a state being good at everything, does not really show up here. Strength in one area travels only weakly, if at all, with strength in another, which suggests these measures capture fairly independent parts of how a hospital system works. That is actually a meaningful result for anyone trying to improve care, because it means you cannot fix one number and expect the rest to follow. As with the first question, these are associations across states at one point in time, so they describe how the measures line up rather than why. A natural next step would be to add a rural versus urban dimension, if the data can be found, to drill further into where these differences come from.

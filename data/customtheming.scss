@@ -1,3 +1,113 @@
 /*-- scss:defaults --*/
 
-$body-bg: #ffffff;
+// Modern geometric + grotesk type
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&display=swap');
+
+// Dark editorial palette
+$body-bg: #0b1622;
+$body-color: #e2e8f0;
+$accent: #2dd4bf;     // mint/teal
+$accent-2: #fbbf24;   // amber
+$muted: #94a3b8;
+
+// Typography
+$font-family-sans-serif: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !default;
+$presentation-font-size-root: 30px;
+$presentation-heading-font: "Space Grotesk", "Inter", sans-serif;
+$presentation-heading-color: #ffffff;
+$presentation-heading-font-weight: 600;
+$presentation-h1-font-size: 2.8em;
+$presentation-h2-font-size: 1.5em;
+$presentation-line-height: 1.4;
+
+$link-color: $accent;
+
+/*-- scss:rules --*/
+
+// Soft gradient backdrop on every slide
+.reveal-viewport {
+  background: radial-gradient(circle at 22% 12%, #163b56 0%, #0b1622 62%) !important;
+}
+
+.reveal .slides section {
+  text-align: left;
+}
+
+// Slide titles: tight, with an accent underline
+.reveal h2 {
+  letter-spacing: -0.02em;
+  border-bottom: 2px solid rgba(45, 212, 191, 0.55);
+  padding-bottom: 0.18em;
+  margin-bottom: 0.5em;
+}
+
+// Bullets
+.reveal ul { line-height: 1.5; }
+.reveal ul li { margin-bottom: 0.45em; }
+.reveal ul li::marker { color: $accent; }
+
+.reveal strong { color: $accent; font-weight: 600; }
+
+// Subtle slide numbers and links
+.reveal .slide-number {
+  background: transparent;
+  color: $muted;
+  font-size: 0.5em;
+}
+.reveal a {
+  color: $accent;
+  text-decoration: none;
+  border-bottom: 1px solid rgba(45, 212, 191, 0.4);
+}
+
+// Rounded figures
+.reveal img { border-radius: 10px; }
+
+// Section divider slides (level-1 headings)
+.reveal section h1 {
+  font-size: 2.8em;
+  letter-spacing: -0.02em;
+}
+
+// "Kicker" eyebrow label
+.reveal .kicker {
+  color: $accent;
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  font-size: 0.55em;
+}
+
+// Big stat band
+.reveal .bigstat {
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 700;
+  font-size: 1.5em;
+  color: $accent;
+  line-height: 1.2;
+}
+.reveal .statlabel { color: $muted; font-size: 0.6em; }
+
+// Tighten figures inside columns
+.reveal .column img,
+.reveal .column .cell { margin-top: 0; }
+
+// Title slide
+#title-slide .title {
+  font-family: "Space Grotesk", sans-serif;
+  font-weight: 700;
+  color: #ffffff;
+  font-size: 2.7em;
+  line-height: 1.08;
+}
+#title-slide .subtitle {
+  color: $accent;
+  font-weight: 500;
+  margin-top: 0.5em;
+}
+#title-slide .author,
+#title-slide .quarto-title-author-name {
+  color: $body-color;
+  margin-top: 1em;
+}

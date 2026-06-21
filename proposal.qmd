@@ -12,10 +12,6 @@ format:
     code-overflow: wrap
     code-line-numbers: true
     embed-resources: true
-  pdf:
-    toc: false
-    code-overflow: wrap
-    geometry: margin=1in
 editor: visual
 code-annotations: hover
 execute:
@@ -36,13 +32,14 @@ library(tidyverse)
 care <- read_csv("data/care_state.csv")
 state_pop <- read_csv("data/state_population.csv")
 glimpse(care)
+glimpse(state_pop)
 ```
 
 The dataset is the **Centers for Medicare & Medicaid Services (CMS) "Timely and Effective Care"** collection, sourced from [data.cms.gov](https://data.cms.gov) and curated for [TidyTuesday week 14, 2025](https://github.com/rfordatascience/tidytuesday/tree/main/data/2025/2025-04-08). It reports state-level hospital quality measures for reporting periods spanning 2023–2024. The file `care_state.csv` holds `r nrow(care)` observations of `r ncol(care)` variables, covering `r n_distinct(care$state)` jurisdictions (50 states, DC, and U.S. territories) and `r n_distinct(care$measure_id)` distinct measures grouped into `r n_distinct(care$condition)` condition areas. The data are stored in a long/tidy layout, one row per state-and-measure, so each analysis pivots the relevant subset wider. The key variables are `state` and `condition` (categorical), `measure_id`/`measure_name` (the metric being reported), and `score` (the numerical value, whose units and direction differ by measure).
 
-I chose this dataset because emergency-department crowding and hospital care quality are active national policy concerns, the data are recent and federally maintained, and the structure cleanly satisfies our need for both numerical (`score`, state population) and categorical (`condition`, Census `region`) variables. It also lets us recode a meaningful geographic grouping and merge in external population data to enrich the analysis.
+I chose this dataset because emergency-department crowding and hospital care quality are active national policy concerns, the data are recent and federally maintained, and the structure cleanly satisfies the requirement for both numerical (`score`, state population) and categorical (`condition`, Census `region`) variables. It also lets me recode a meaningful geographic grouping and merge in external population data to enrich the analysis.
 
-I derive two variables used across the questions. **`region`** is the four-level U.S. Census region (Northeast, Midwest, South, West) recoded from each state code, and **`state_pop`** is the state's 2024 population, merged from a small Census-estimate file committed to `/data`.
+I derive two variables used across the questions. **`region`** is the four-level U.S. Census region (Northeast, Midwest, South, West) recoded from each state code, and **`state_pop`** is the state's 2024 population, merged from a small Census-estimate file committed to `/data`. A full codebook for both data files is provided in [`data/README.md`](data/README.md).
 
 ## Questions
 
@@ -50,13 +47,13 @@ I derive two variables used across the questions. **`region`** is the four-level
 
 **Question 2 — Treatment effectiveness.** Across **Census regions**, how do states compare on **treatment-effectiveness** measures, stroke CT timeliness (`OP_23`), colonoscopy follow-up appropriateness (`OP_29`), and safe opioid use (`SAFE_USE_OF_OPIOIDS`), and do states that score well on one tend to score well on the others?
 
-These questions are distinct: Question 1 uses the ED-timing measures plus population, while Question 2 uses three effectiveness measures; they share only the derived `region` variable. Because the data are observational, we will frame all findings as **associations** and avoid causal language.
+These questions are distinct: Question 1 uses the ED-timing measures plus population, while Question 2 uses three effectiveness measures; they share only the derived `region` variable. Because the data are observational, I will frame all findings as **associations** and avoid causal language.
 
 ## Analysis plan
 
-**Question 1 (ED throughput).** Filter to `condition == "Emergency Department"`, keep the volume-stratified `OP_18b_LOW_MIN`, `OP_18b_MEDIUM_MIN`, `OP_18b_HIGH_MIN`, and `OP_18b_VERY_HIGH_MIN` measures, and pivot so each state has one wait-time value per volume tier. Join `region` and `state_pop`. Variables involved: ED wait time (numerical), volume tier (categorical), region (categorical), and state population (numerical), four variables. Planned `ggplot2` figures: (1) boxplots of wait time by volume tier, colored or faceted by region; (2) a scatter of state population versus median ED wait time.
+**Question 1 (ED throughput).** Filter to `condition == "Emergency Department"` and keep both the overall `OP_18b` measure and the four volume-stratified measures (`OP_18b_LOW_MIN`, `OP_18b_MEDIUM_MIN`, `OP_18b_HIGH_MIN`, `OP_18b_VERY_HIGH_MIN`), pivoting so each state has one wait-time value per volume tier plus its overall value. Join `region` and `state_pop`. Variables involved: ED wait time (numerical), volume tier (categorical), region (categorical), and state population (numerical), four variables. Planned `ggplot2` figures: (1) boxplots with volume tier on the x-axis and wait time on the y-axis, where each box summarizes the distribution of states' median wait times within that tier, faceted or colored by region; (2) a scatter of state population versus the overall `OP_18b` median ED wait time. States with a missing (`NA`) score for a given measure are excluded from that measure's figure, and the number dropped will be reported.
 
-**Question 2 (treatment effectiveness).** Filter to the three effectiveness measures, pivot them wide so each state has one column per measure, and join `region`. We will first confirm each measure's direction ("higher is better" versus "lower is better") from `measure_name`. Variables involved: `OP_23`, `OP_29`, and `SAFE_USE_OF_OPIOIDS` scores (numerical) plus region (categorical), more than two variables. Planned `ggplot2` figures: (1) a regional comparison of the measures (e.g., point-range or bar summaries by region); (2) a scatter relating two measures across states to assess whether strong performance on one accompanies strong performance on another.
+**Question 2 (treatment effectiveness).** Filter to the three effectiveness measures, pivot them wide so each state has one column per measure, and join `region`. I will first confirm each measure's direction ("higher is better" versus "lower is better") from `measure_name` so the scores are comparable. Variables involved: `OP_23`, `OP_29`, and `SAFE_USE_OF_OPIOIDS` scores (numerical) plus region (categorical), more than two variables. Planned `ggplot2` figures: (1) a regional comparison of the measures (e.g., point-range or bar summaries by region); (2) all three pairwise relationships among the measures, rather than a single pair, to assess whether strong performance on one accompanies strong performance on the others. As in Question 1, states with a missing score for a given measure are excluded from that measure's figure, with the count reported.
 
 **Derived variables.** `region` is built from base R's `state.abb`/`state.region` (recoding "North Central" to "Midwest" and assigning DC to the South). `state_pop` is merged from `data/state_population.csv`. Territories lacking a Census region or population estimate will be dropped from the relevant analyses and this exclusion will be reported.
 
@@ -66,9 +63,10 @@ These questions are distinct: Question 1 uses the ED-timing measures plus popula
 |---------------|---------------|---------------|---------------|---------------|
 | Finalize dataset & draft proposal | Complete | Jun 4 | High | Load data, write Q1/Q2, complete proposal.qmd and data README |
 | Submit proposal for peer review | Complete | Jun 4, 5pm | High | Render and push proposal |
-| Address peer-review issues | Not started | Jun 9, 5pm | High | Revise proposal and close GitHub issues |
-| Data wrangling (region, population, pivots) | Not started | Jun 13 | High | Build clean tidy frames for both questions |
-| Question 1 analysis & figures | Not started | Jun 18 | Moderate | ED throughput plots and discussion |
-| Question 2 analysis & figures | Not started | Jun 23 | Moderate | Effectiveness plots and discussion |
-| Write-up (index.qmd) & website | Not started | Jun 27 | Moderate | Introduction, both questions, conclusions |
-| Slides & recorded presentation | Not started | Jun 30, 5pm | High | \~6 content slides, presentation under 5 minutes |
+| Address peer-review issues | Complete | Jun 9, 5pm | High | Revise proposal and close GitHub issues |
+| Data wrangling (region, population, pivots) | Complete | Jun 13 | High | Build clean tidy frames for both questions |
+| Question 1 analysis & figures | Complete | Jun 18 | Moderate | ED throughput plots and discussion |
+| Question 2 analysis & figures | Complete | Jun 23 | Moderate | Effectiveness plots and discussion |
+| Write-up (index.qmd) & website | Complete | Jun 27 | Moderate | Introduction, both questions, conclusions |
+| Build presentation slides | Complete | Jun 30, 5pm | High | ~6 content slides, presentation under 5 minutes |
+| Record presentation video | In progress | Jun 30, 5pm | High | Record the slide walk-through under 5 minutes |
