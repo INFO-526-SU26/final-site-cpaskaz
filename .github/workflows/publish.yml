@@ -47,6 +47,10 @@ jobs:
             pip install -r requirements.txt
           fi
 
+      - name: Install TinyTeX
+        run: |
+          quarto install tinytex
+
       - name: Build site
         run: |
           quarto render
